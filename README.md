@@ -1,322 +1,160 @@
 # VaultLens
 
-An agent-powered web interface for querying and managing HashiCorp Vault, combining audit log exploration with vault operations.
+VaultLens is a full-stack TypeScript app for interacting with HashiCorp Vault using an LLM agent. It combines:
 
-## Overview
+- Vault audit analysis (via `vault-audit-mcp`)
+- Vault operational queries/actions (via `vault-mcp-server`)
+- A React UI with streaming responses and session-scoped history
 
-VaultLens is a full-stack application that:
+## Stack
 
-1. **Provides a Browser UI** - Clean, modern chat-like interface for querying Vault
-2. **Uses Claude as an Agent** - Understands natural language queries about your Vault instance
-3. **Integrates with Two MCP Servers**:
-   - **Vault Audit MCP Server** - For querying and analyzing audit logs
-   - **Vault MCP Server** - For performing Vault operations (read/write secrets, manage policies, etc.)
-4. **Orchestrates Tool Calls** - Intelligently decides which tools to invoke based on user queries
-5. **Synthesizes Results** - Combines data from multiple sources into coherent responses
+- Frontend: React 18 + Vite
+- Backend: Express + TypeScript (`tsx` in dev)
+- LLM providers: Anthropic and OpenAI (selectable)
+- MCP integration: stdio child-process clients for both MCP servers
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Browser Client (React)                 │
-│                                                           │
-│  - Chat interface                                         │
-│  - Query history                                          │
-│  - Result visualization                                   │
-└────────────────┬────────────────────────────────────────┘
-                 │ HTTP / JSON
-┌────────────────▼────────────────────────────────────────┐
-│        Express Server (Node.js / TypeScript)             │
-│                                                           │
-│  - API endpoints                                          │
-│  - Request handling                                       │
-│  - Claude agent orchestration                             │
-└────────┬──────────────────────────────┬──────────────────┘
-         │                              │
-    HTTP │ / Tool Calls                 │ / Tool Calls
-         │                              │
-┌────────▼────────────────────┐ ┌──────▼──────────────────┐
-│  Vault Audit MCP Server      │ │ Vault MCP Server       │
-│                              │ │                        │
-│ - search_events              │ │ - Secrets management   │
-│ - aggregate                  │ │ - Policy management    │
-│ - trace                       │ │ - Auth operations      │
-│                              │ │ - And more...          │
-└─────────────────────────────┘ └────────────────────────┘
-         │                              │
-    Loki │ Query                   Vault │ API
-         │                              │
-    ┌────▼──────────┐         ┌─────────▼────────┐
-    │ Loki Instance │         │ Vault Server     │
-    │ (Audit Logs)  │         │ (Port 8200)      │
-    └───────────────┘         │                  │
-                              │ (Running on      │
-                              │  port 8080 via   │
-                              │  MCP Server)     │
-                              └──────────────────┘
+- Browser client calls Express API (`/api/*` through Vite proxy in dev)
+- Express server orchestrates tool execution through an LLM service
+- Execution engine calls:
+  - `vault-audit-mcp` (stdio)
+  - `vault-mcp-server` (stdio)
+- Vault authentication state is managed server-side (OIDC or token auth)
+
+## Prerequisites
+
+- Node.js 18+
+- Built binaries (or runnable commands) for:
+  - `vault-audit-mcp`
+  - `vault-mcp-server`
+- Vault cluster accessible from the backend
+- Loki accessible if you use audit queries
+- API key for selected LLM provider
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
 ```
 
-## Getting Started
+2. Create env file:
 
-### Prerequisites
+```bash
+cp .env.example .env
+```
 
-1. **Node.js 18+** - For running the application
-2. **Claude API Key** - From Anthropic (https://console.anthropic.com)
-3. **Vault MCP Server** - Running on port 8080
-4. **Vault Audit MCP Server** - Running and accessible
-5. **Vault Instance** - With audit logs being generated to Loki
+3. Configure `.env`.
 
-### Installation
+## Environment Variables
 
-1. **Clone the repository** (if not already done):
-   ```bash
-   cd vaultlens
-   ```
+- `LLM_PROVIDER`: `anthropic` (default) or `openai`
+- `ANTHROPIC_API_KEY`: required when `LLM_PROVIDER=anthropic`
+- `OPENAI_API_KEY`: required when `LLM_PROVIDER=openai`
+- `OPENAI_MODEL`: OpenAI model name (runtime default: `gpt-5.2`)
+- `VAULT_AUDIT_MCP_COMMAND`: command/path for audit MCP server (default `./vault-audit-mcp`)
+- `VAULT_MCP_COMMAND`: command/path for Vault MCP server (default `./vault-mcp-server`)
+- `LOKI_URL`: passed to `vault-audit-mcp` (default `http://localhost:3100`)
+- `API_PORT`: backend port (default `3001`)
+- `VITE_PORT`: frontend dev port (default `5173`)
+- `VAULT_OIDC_REDIRECT_URI`: OIDC callback URL (default `http://localhost:8250/oidc/callback`)
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+Notes:
+- `VAULT_MCP_URL` appears in `.env.example` but is not used by current server code.
+- MCP servers are started as local processes via stdio, not HTTP URLs.
 
-3. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   ```
+## Development
 
-   Then edit `.env` and add:
-   - `ANTHROPIC_API_KEY`: Your Claude API key
-   - `VAULT_MCP_URL`: Vault MCP server URL (default: http://localhost:8080)
-   - `VAULT_AUDIT_MCP_URL`: Vault Audit MCP server URL
-   - `API_PORT`: Backend API server port (default: 3001)
-   - `VITE_PORT`: Frontend dev server port (default: 5173)
-
-### Development
-
-Start the development server (both frontend and backend):
+Run frontend and backend together:
 
 ```bash
 npm run dev
 ```
 
-This runs:
-- **Backend**: TypeScript/Node.js server on port 3001
-- **Frontend**: Vite dev server on port 3000 with proxy to backend
+- Backend: `http://localhost:3001` (or `API_PORT`)
+- Frontend: `http://localhost:5173` (or `VITE_PORT`)
 
-Then open http://localhost:3000 in your browser.
+The frontend proxies `/api` to the backend.
 
-### Production Build
+## Build
 
 ```bash
 npm run build
 ```
 
-This creates optimized builds for both server and client in the `dist/` directory.
-
-## Usage
-
-### Query Examples
-
-Once the application is running, try queries like:
-
-**Audit Log Queries:**
-- "Show me all audit events from the last hour"
-- "How many read operations were performed today?"
-- "What errors occurred on the PKI mount?"
-- "Were there any failed authentication attempts?"
-- "Trace the request ID: abc-123-def-456"
-
-**Vault Operations:**
-- "Create a new secret at secret/app/config"
-- "List all policies"
-- "Read the token policy"
-- "Show me secrets under secret/database/"
-
-**Combined Queries:**
-- "Find all failed operations in the last 24 hours and show me what they were trying to access"
-- "Count operations by type and tell me which operations had errors"
-- "Show me audit events for the transit engine and what paths were accessed"
-
-### Features
-
-- **Conversational Interface** - Ask questions in natural language
-- **Tool Visibility** - See which tools the agent is calling and their parameters
-- **Result Details** - View structured results and tool responses
-- **Query History** - All conversations are tracked and can be reviewed
-- **Clear History** - Start fresh at any time
+Outputs:
+- Server build under `dist/server`
+- Client build under `dist/client`
 
 ## API Endpoints
 
-### POST /query
+Base backend endpoints:
 
-Execute a query via the Claude agent.
+- `GET /health`
+- `POST /query`
+- `POST /query/stream` (SSE stream)
+- `GET /history`
+- `POST /history/clear`
+- `GET /tokens`
+- `GET /suggestions`
+- `POST /suggestions/clear`
+- `GET /activities`
+- `POST /activities/clear`
+- `GET /auth/status`
+- `POST /auth/login`
+- `POST /auth/oidc/auth-url`
+- `POST /auth/oidc/complete`
+- `POST /auth/switch-cluster`
+- `POST /auth/logout`
 
-**Request:**
-```json
-{
-  "query": "Show me all audit events from the last hour"
-}
-```
+Session behavior:
+- Session ID is read from `X-Session-ID` header.
+- If omitted, backend uses `default` session.
+- Frontend generates and persists a session ID in `localStorage`.
 
-**Response:**
-```json
-{
-  "query": "Show me all audit events from the last hour",
-  "response": "Based on the audit logs...",
-  "toolCalls": [
-    {
-      "type": "audit",
-      "tool": "audit.search_events",
-      "arguments": { "limit": 100 }
-    }
-  ],
-  "toolResults": [
-    {
-      "type": "audit",
-      "tool": "audit.search_events",
-      "success": true,
-      "result": [...audit events...]
-    }
-  ],
-  "reasoning": "The user asked for audit events...",
-  "timestamp": "2024-02-10T21:30:00Z"
-}
-```
+## Authentication
 
-### GET /history
+VaultLens supports:
 
-Retrieve the query history.
+- OIDC login flow (popup + local callback)
+- Direct token-based login
 
-**Response:**
-```json
-{
-  "history": [
-    { ...QueryResult... },
-    { ...QueryResult... }
-  ]
-}
-```
+Current token handling:
+- Tokens are cached in memory only (per cluster)
+- Periodic renewal checks clear expiring tokens and require re-authentication
+- Logout attempts token revocation (`revoke-self`) for OIDC-managed tokens
 
-### POST /history/clear
+## What the Agent Can Use
 
-Clear all query history.
+Audit-side capabilities include:
+- search/aggregate/trace audit events
+- fetch detailed event data by `request_id`
 
-**Response:**
-```json
-{
-  "success": true
-}
-```
+Vault-side capabilities include many `vault-mcp-server` tools (for example namespace, mount, secret, policy, auth-method, replication, health, metrics, and lease inspection).
+
+Exact available tools are determined by the connected MCP servers and current versions.
 
 ## Project Structure
 
-```
-vaultlens/
-├── src/
-│   ├── server/
-│   │   ├── index.ts              # Express app setup
-│   │   ├── agent.ts              # Claude agent service
-│   │   └── execution-engine.ts   # Tool execution orchestration
-│   └── client/
-│       ├── main.tsx              # React entry point
-│       ├── App.tsx               # Main component
-│       └── App.css               # Styles
-├── dist/                          # Compiled output
-├── index.html                     # HTML entry point
-├── package.json                   # Dependencies
-├── tsconfig.json                  # TypeScript config
-├── vite.config.ts                 # Vite config
-├── .env.example                   # Environment variable template
-└── README.md                       # This file
+```text
+src/
+  client/    React UI
+  server/    Express API, auth manager, LLM services, MCP clients
 ```
 
-## Tool Integration Details
+## Scripts
 
-### Vault Audit MCP Server Tools
-
-The agent has access to these audit tools:
-
-- **search_audit_events** - Search events with filters
-  - Parameters: limit, namespace, operation, mount_type, status, start_rfc3339, end_rfc3339
-  
-- **aggregate_audit_events** - Count events by dimension
-  - Parameters: by (vault_namespace|vault_operation|vault_mount_type|vault_status), filters
-  
-- **trace_request** - Trace events for a specific request
-  - Parameters: request_id, limit
-
-### Vault MCP Server Tools
-
-The agent can call Vault operations:
-
-- **vault_operation** - Perform any Vault operation
-  - Parameters: operation, path, data (for writes)
-
-## Troubleshooting
-
-### Claude API Key Not Working
-- Verify `ANTHROPIC_API_KEY` is set in `.env`
-- Check that the key is valid at https://console.anthropic.com
-- Ensure the key has appropriate usage limits
-
-### Can't Connect to Vault MCP Server
-- Check that Vault MCP server is running on port 8080
-- Verify `VAULT_MCP_URL` in `.env`
-- Check firewall and network connectivity
-
-### Can't Connect to Audit MCP Server
-- Verify the audit server is running
-- Check `VAULT_AUDIT_MCP_URL` in `.env`
-- Ensure Loki is accessible and has audit data
-
-### Empty Query Results
-- Verify Vault is generating audit logs
-- Check that logs are reaching Loki
-- Try more specific filters in your query
-- See [vault-audit-mcp TESTING.md](../vault-audit-mcp/TESTING.md) for debugging
-
-## Development
-
-### Type Checking
-
-```bash
-npm run type-check
-```
-
-### Building
-
-```bash
-npm run build:server   # TypeScript compilation
-npm run build:client   # Vite build
-```
-
-## Next Steps
-
-1. **Implement Real MCP Connection**
-   - Currently using mock implementations
-   - Connect to actual Vault MPC server and Audit MCP server
-   - Handle stdio/HTTP communication
-
-2. **Add More Tools**
-   - Vault auth methods
-   - Certificate management
-   - Replication commands
-   - Identity management
-
-3. **Enhance UI**
-   - Better formatting for different result types
-   - Charts and graphs for audit statistics
-   - Advanced filtering UI
-
-4. **Add Persistence**
-   - Save conversation history to database
-   - User authentication
-   - Per-user history and preferences
-
-5. **Monitoring and Logging**
-   - Comprehensive audit logging of agent actions
-   - Performance metrics
-   - Error tracking
+- `npm run dev`
+- `npm run dev:server`
+- `npm run dev:client`
+- `npm run build`
+- `npm run build:server`
+- `npm run build:client`
+- `npm run preview`
+- `npm run type-check`
 
 ## License
 
-See [LICENSE](LICENSE)
+See `LICENSE`.
