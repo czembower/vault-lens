@@ -33,8 +33,10 @@
 .activity-panel .cluster-identity-label {
     font-weight: 600;
     color: var(--text-secondary);
-    font-size: 0.65rem;
-    letter-spacing: 0.05em;
+    font-family: var(--ui-font);
+    font-size: 0.72rem;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
     opacity: 0.8;
     min-width: 0;
     width: 100%;
@@ -267,6 +269,17 @@
     line-height: 1.4;
     word-wrap: break-word;
     overflow-wrap: break-word;
+}
+
+/* Bottom auth block in left panel: keep edge offsets consistent with
+   the panel's own 20px window inset (avoid extra bottom margin). */
+.activity-panel .auth-status-wrapper {
+    padding: 0 0.5rem;
+    flex-shrink: 0;
+}
+
+.activity-panel .auth-status-wrapper .auth-status {
+    margin-bottom: 0;
 }
 
 @media (max-width: 768px) {

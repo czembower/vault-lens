@@ -64,6 +64,25 @@ interface SessionData {
 const sessions = new Map<string, SessionData>()
 const SESSION_TIMEOUT = 60 * 60 * 1000 // 1 hour
 
+// Clear all per-session UI state and reset MCP clients.
+// We do this during auth transitions to avoid cross-user/session residue.
+async function resetAndClearAllSessions(reason: string): Promise<void> {
+    console.log(`[Session] Resetting and clearing all sessions: ${reason}`)
+    for (const [sessionId, session] of sessions.entries()) {
+        try {
+            if (typeof session.agent?.clearHistory === 'function') {
+                session.agent.clearHistory()
+            }
+            session.suggestions = []
+            session.activities = []
+            await session.executionEngine.reset()
+            console.log(`[Session] Cleared session: ${sessionId}`)
+        } catch (error) {
+            console.error(`[Session] Failed to clear session ${sessionId}:`, error)
+        }
+    }
+}
+
 // Get or create session
 function getSession(sessionId: string): SessionData {
     let session = sessions.get(sessionId)
@@ -383,10 +402,7 @@ app.post('/auth/oidc/complete', async (req: Request, res: Response) => {
     try {
         await authManager.completeOIDCAuth()
 
-        // Reset MCP clients for all sessions with new cluster connection
-        for (const session of sessions.values()) {
-            await session.executionEngine.reset()
-        }
+        await resetAndClearAllSessions('oidc-auth-complete')
 
         res.json({ success: true })
     } catch (error) {
@@ -420,10 +436,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
             await authManager.authenticate()
         }
 
-        // Reset MCP clients for all sessions with new cluster connection
-        for (const session of sessions.values()) {
-            await session.executionEngine.reset()
-        }
+        await resetAndClearAllSessions('login')
 
         res.json({ success: true })
     } catch (error) {
@@ -446,10 +459,7 @@ app.post('/auth/switch-cluster', async (req: Request, res: Response) => {
 
         await authManager.switchCluster(vaultAddr, oidcMount, oidcRole)
 
-        // Reset MCP clients for all sessions with new cluster
-        for (const session of sessions.values()) {
-            await session.executionEngine.reset()
-        }
+        await resetAndClearAllSessions('switch-cluster')
 
         res.json({ success: true })
     } catch (error) {
@@ -466,12 +476,9 @@ app.post('/auth/logout', async (req: Request, res: Response) => {
         // Revoke token in Vault and clear from cache
         await authManager.clearToken()
 
-        // Reset MCP clients for all sessions so they don't continue using old token
-        for (const session of sessions.values()) {
-            await session.executionEngine.reset()
-        }
+        await resetAndClearAllSessions('logout')
 
-        console.log('[Auth] Logout complete - token revoked, cache cleared, MCP clients reset')
+        console.log('[Auth] Logout complete - token revoked, cache cleared, sessions reset')
         res.json({ success: true })
     } catch (error) {
         console.error('[Error]', error)

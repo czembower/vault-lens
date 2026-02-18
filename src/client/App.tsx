@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { MarkdownText } from './MarkdownText'
 import { DocumentationSidebar } from './DocumentationSidebar'
-import { AuthStatus } from './AuthStatus'
 import { ActivityPanel } from './ActivityPanel'
 import { TokenUsage } from './TokenUsage'
 import './App.css'
@@ -42,36 +41,43 @@ function App() {
     const [authenticated, setAuthenticated] = useState<boolean>(true)
     const [authLoading, setAuthLoading] = useState(false)
     const [authLoadingMessage, setAuthLoadingMessage] = useState<string | null>(null)
-    // Track when AuthStatus is ready (after login/logout)
-    const [authStatusReady, setAuthStatusReady] = useState(true)
+    // True after auth network calls finish but before UI is fully ready to use
+    const [authPendingUiReady, setAuthPendingUiReady] = useState(false)
     const [tokenCount, setTokenCount] = useState<{ total: number; messages: number; maxContext: number } | null>(null)
     const [uiReadyForAuth, setUiReadyForAuth] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
 
     // Check authentication status
-    useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                const response = await fetch('/api/auth/status')
-                if (response.ok) {
-                    const data = await response.json()
-                    setAuthenticated(data.authenticated)
+    const checkAuth = useCallback(async () => {
+        try {
+            const response = await fetch('/api/auth/status')
+            if (response.ok) {
+                const data = await response.json()
+                setAuthenticated(data.authenticated)
 
-                    // If unauthenticated, clear messages
-                    if (!data.authenticated) {
-                        setMessages([])
-                    }
+                // If unauthenticated, clear messages
+                if (!data.authenticated) {
+                    setMessages([])
                 }
-            } catch (err) {
-                console.error('Failed to check authentication:', err)
             }
+        } catch (err) {
+            console.error('Failed to check authentication:', err)
         }
+    }, [])
 
+    useEffect(() => {
         checkAuth()
         const interval = setInterval(checkAuth, 2000) // Check every 2 seconds for quick auth detection
-        return () => clearInterval(interval)
-    }, [])
+        const handleAuthRefresh = () => {
+            void checkAuth()
+        }
+        window.addEventListener('vault-auth-status-refresh', handleAuthRefresh)
+        return () => {
+            clearInterval(interval)
+            window.removeEventListener('vault-auth-status-refresh', handleAuthRefresh)
+        }
+    }, [checkAuth])
 
     // Safety timeout: clear loading state if it's been active too long (prevents stuck state)
     useEffect(() => {
@@ -80,11 +86,36 @@ function App() {
                 console.warn('Loading state timeout - clearing after 30 seconds')
                 setAuthLoading(false)
                 setAuthLoadingMessage(null)
+                setAuthPendingUiReady(false)
             }, 30000) // 30 second safety timeout
 
             return () => clearTimeout(safetyTimer)
         }
+        return undefined
     }, [authLoading, authLoadingMessage])
+
+    // Keep auth loading overlay visible until the UI is truly ready.
+    // For login: wait for authenticated=true and one paint cycle.
+    // For logout: wait for unauthenticated UI-ready callback.
+    useEffect(() => {
+        if (!authLoading || !authPendingUiReady) return undefined
+
+        if (authenticated) {
+            const timer = setTimeout(() => {
+                setAuthLoading(false)
+                setAuthLoadingMessage(null)
+                setAuthPendingUiReady(false)
+            }, 150)
+            return () => clearTimeout(timer)
+        }
+
+        if (!authenticated && uiReadyForAuth) {
+            setAuthLoading(false)
+            setAuthLoadingMessage(null)
+            setAuthPendingUiReady(false)
+        }
+        return undefined
+    }, [authLoading, authPendingUiReady, authenticated, uiReadyForAuth])
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -259,33 +290,29 @@ function App() {
 
     // Called by AuthStatus at start/end of login/logout
     const handleAuthLoadingChange = useCallback((loading: boolean, message: string | null) => {
-        // Only allow overlay to be hidden if not loading, user is unauthenticated, and UI is ready
-        if (!loading && !authenticated && uiReadyForAuth) {
-            setAuthLoading(false)
-            setAuthLoadingMessage(null)
-            setAuthStatusReady(true)
-        } else {
+        if (loading) {
             setAuthLoading(loading)
             setAuthLoadingMessage(message)
-            setAuthStatusReady(!loading)
+            setAuthPendingUiReady(false)
+            setUiReadyForAuth(false)
+            return
         }
-    }, [authenticated, uiReadyForAuth])
+
+        // Keep overlay visible after network auth completes until UI readiness effect dismisses it.
+        setAuthPendingUiReady(true)
+        setAuthLoadingMessage(message || 'Finalizing interface...')
+    }, [])
 
     // Called by AuthStatus when unauthenticated UI is visible
     const handleUnauthenticatedViewReady = useCallback(() => {
         setUiReadyForAuth(true)
-        // If overlay is waiting for UI, hide it now
-        if (!authLoading && !authenticated) {
-            setAuthLoading(false)
-            setAuthLoadingMessage(null)
-            setAuthStatusReady(true)
-        }
-    }, [authLoading, authenticated])
+    }, [])
 
     const handleLogout = async () => {
         setAuthLoading(true)
+        setAuthPendingUiReady(false)
         setAuthLoadingMessage('Logging out...')
-        setAuthStatusReady(false)
+        setUiReadyForAuth(false)
         try {
             // Clear chat history and suggestions
             await fetch('/api/history/clear', {
@@ -293,6 +320,10 @@ function App() {
                 headers: { 'X-Session-ID': sessionId.current }
             })
             await fetch('/api/suggestions/clear', {
+                method: 'POST',
+                headers: { 'X-Session-ID': sessionId.current }
+            })
+            await fetch('/api/activities/clear', {
                 method: 'POST',
                 headers: { 'X-Session-ID': sessionId.current }
             })
@@ -319,7 +350,7 @@ function App() {
             if (isUnauth) {
                 setAuthLoading(false)
                 setAuthLoadingMessage(null)
-                setAuthStatusReady(true)
+                setAuthPendingUiReady(false)
             }
 
             // Notify other components to refresh auth status immediately
@@ -330,7 +361,7 @@ function App() {
             console.error('Logout failed:', err)
             setAuthLoading(false)
             setAuthLoadingMessage(null)
-            setAuthStatusReady(true)
+            setAuthPendingUiReady(false)
         }
     }
 

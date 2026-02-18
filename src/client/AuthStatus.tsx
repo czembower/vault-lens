@@ -235,8 +235,6 @@ export function AuthStatus({ onLogout, onAuthLoadingChange, hideLogoutButton, on
     const handleLogout = async () => {
         setConnectLoadingImmediate(true, 'Logging out...')
         try {
-            // Clear chat history
-            await fetch('/api/history/clear', { method: 'POST' })
             // Logout and clear auth token
             await fetch('/api/auth/logout', { method: 'POST' })
             // Clear messages in UI
