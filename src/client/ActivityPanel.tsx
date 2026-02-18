@@ -51,25 +51,25 @@ function ClusterIdentity() {
             {clusterInfo.vaultAddr && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Vault Address:</span>
-                    <span className="cluster-identity-value cluster-vault-addr">{clusterInfo.vaultAddr}</span>
+                    <span className="cluster-identity-value cluster-vault-addr" title={clusterInfo.vaultAddr}>{clusterInfo.vaultAddr}</span>
                 </div>
             )}
             {clusterInfo.clusterName && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Cluster Name:</span>
-                    <span className="cluster-identity-value cluster-name">{clusterInfo.clusterName}</span>
+                    <span className="cluster-identity-value cluster-name" title={clusterInfo.clusterName}>{clusterInfo.clusterName}</span>
                 </div>
             )}
             {clusterInfo.clusterId && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Cluster ID:</span>
-                    <span className="cluster-identity-value cluster-id">{clusterInfo.clusterId}</span>
+                    <span className="cluster-identity-value cluster-id" title={clusterInfo.clusterId}>{clusterInfo.clusterId}</span>
                 </div>
             )}
             {clusterInfo.version && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Vault version:</span>
-                    <span className="cluster-identity-value cluster-version">{clusterInfo.version}</span>
+                    <span className="cluster-identity-value cluster-version" title={clusterInfo.version}>{clusterInfo.version}</span>
                 </div>
             )}
             <div className="cluster-identity-item">
