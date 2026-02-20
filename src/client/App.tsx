@@ -46,7 +46,9 @@ function App() {
     const [tokenCount, setTokenCount] = useState<{ total: number; messages: number; maxContext: number } | null>(null)
     const [uiReadyForAuth, setUiReadyForAuth] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const messagesContainerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
 
     // Check authentication status
     const checkAuth = useCallback(async () => {
@@ -122,8 +124,30 @@ function App() {
     }
 
     useEffect(() => {
-        scrollToBottom()
-    }, [messages])
+        if (autoScrollEnabled) {
+            scrollToBottom()
+        }
+    }, [messages, autoScrollEnabled])
+
+    const handleMessagesScroll = useCallback(() => {
+        const container = messagesContainerRef.current
+        if (!container) return
+
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+        const nearBottom = distanceFromBottom < 40
+
+        if (nearBottom) {
+            if (!autoScrollEnabled) setAutoScrollEnabled(true)
+            return
+        }
+
+        if (autoScrollEnabled) setAutoScrollEnabled(false)
+    }, [autoScrollEnabled])
+
+    const handleJumpToLatest = useCallback(() => {
+        setAutoScrollEnabled(true)
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [])
 
     // Auto-focus input on mount and after loading completes
     useEffect(() => {
@@ -453,7 +477,11 @@ function App() {
                     <div className="main-layout">
                         <div className="center-content">
                             <div className="chat-container">
-                                <div className="messages">
+                                <div
+                                    ref={messagesContainerRef}
+                                    className="messages"
+                                    onScroll={handleMessagesScroll}
+                                >
                                     {!authenticated && messages.length === 0 && (
                                         <div className="unauthenticated-image-container">
                                             <img src="/vault-lens.png" alt="VaultLens" className="vault-lens-image" />
@@ -494,6 +522,18 @@ function App() {
                                     <div ref={messagesEndRef} />
                                 </div>
                             </div>
+
+                            {loading && !autoScrollEnabled && (
+                                <div className="auto-scroll-chip-row">
+                                    <button
+                                        type="button"
+                                        className="auto-scroll-chip"
+                                        onClick={handleJumpToLatest}
+                                    >
+                                        Auto-scroll paused · Jump to latest
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="input-area">
                                 <form onSubmit={handleSubmit} className="input-form">

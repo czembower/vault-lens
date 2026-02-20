@@ -2,11 +2,11 @@
 
 :root {
     /* Primary teal/cyan palette */
-    --primary: #06b6d4;
-    --primary-light: #22d3ee;
-    --primary-dark: #0891b2;
-    --accent: #06b6d4;
-    --accent-dark: #0e7490;
+    --primary: #0e9f7a;
+    --primary-light: #31b991;
+    --primary-dark: #0a7a5d;
+    --accent: #0e9f7a;
+    --accent-dark: #0a7a5d;
 
     /* Semantic colors */
     --success: #10b981;
@@ -14,17 +14,17 @@
     --warning: #f59e0b;
 
     /* Neutral palette */
-    --bg: #ffffff;
-    --bg-secondary: #f8fafc;
-    --bg-tertiary: #f1f5f9;
-    --surface: #ffffff;
-    --border: #e2e8f0;
-    --border-light: #f1f5f9;
+    --bg: #d8dcdf;
+    --bg-secondary: #c7cdd1;
+    --bg-tertiary: #b5bdc3;
+    --surface: #e3e8eb;
+    --border: #9ea9b0;
+    --border-light: #b9c3c9;
 
     /* Text colors */
-    --text: #0f172a;
-    --text-secondary: #475569;
-    --text-tertiary: #94a3b8;
+    --text: #151d24;
+    --text-secondary: #44525d;
+    --text-tertiary: #6c7a84;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -60,12 +60,12 @@
         --error: #f87171;
         --warning: #fbbf24;
 
-        --bg: #0f172a;
-        --bg-secondary: #1e293b;
-        --bg-tertiary: #334155;
-        --surface: #1e293b;
-        --border: #334155;
-        --border-light: #475569;
+        --bg: #0f1114;
+        --bg-secondary: #171b20;
+        --bg-tertiary: #232a31;
+        --surface: #171b20;
+        --border: #2f3740;
+        --border-light: #3d4752;
 
         --text: #f1f5f9;
         --text-secondary: #cbd5e1;
@@ -160,7 +160,7 @@ pre {
 
 .app-header {
     padding: 2.5rem 2rem;
-    background: var(--surface);
+    background: var(--bg-secondary);
     color: var(--text);
 }
 
@@ -350,6 +350,36 @@ pre {
     background: linear-gradient(to bottom, var(--bg-secondary), transparent);
     pointer-events: none;
     z-index: 10;
+}
+
+.auto-scroll-chip {
+    position: relative;
+    z-index: 2;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auto-scroll-chip-row {
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 0.25rem 0 0;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.auto-scroll-chip:hover {
+    color: var(--text);
+    border-color: var(--primary);
+    transform: translateY(-1px);
 }
 
 /* Unauthenticated State Image */
@@ -729,7 +759,7 @@ pre {
 /* Input Area */
 .input-area {
     padding: 1.5rem 2rem 2rem 2rem;
-    background: var(--surface);
+    background: var(--bg-secondary);
 }
 
 .unauthenticated-message {

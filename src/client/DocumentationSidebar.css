@@ -1,10 +1,11 @@
 /* Documentation Sidebar - Right Side */
 .documentation-sidebar {
     position: fixed;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 11.25vw;
+    right: 20px;
+    top: 20px;
+    bottom: 20px;
+    width: clamp(210px, 18vw, 390px);
+    max-width: calc(100vw - 40px);
     background: var(--bg-secondary);
     display: flex;
     flex-direction: column;

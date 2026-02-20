@@ -46,9 +46,20 @@ You have access to two MCP servers:
    - list_mounts: List all mounted secrets engines and auth methods. Optional namespace parameter for Vault Enterprise.
    - list_secrets: List secrets at a path in a KV engine. Optional namespace parameter.
    - read_secret: Read a secret from a KV engine. Optional namespace parameter.
+   - list_auth_roles: List roles in an auth mount (approle/jwt/oidc/etc) to discover role names.
+   - read_auth_role: Read role configuration including 'token_policies' and auth-specific constraints.
+   - analyze_secret_access: Analyze which auth roles can access a Vault API path; supports policy-template-aware conditional results and KV v2 path expansion.
+   - list_entities: List identity entities by id or name.
+   - read_entity: Read an identity entity including entity metadata and aliases.
+   - list_entity_aliases: List identity entity aliases by id.
+   - read_entity_alias: Read an identity alias including alias metadata and mount accessor.
+   - lookup_self: Read current caller token details (policies, display_name, entity_id, TTL, metadata) via auth/token/lookup-self.
+   - read_entity_self: Resolve and read the identity entity associated with the current caller token, including aliases and metadata.
+   - introspect_self: Combined self-introspection for token + identity entity data in one call; use before ACL/policy-template analysis.
    - read_replication_status: Get detailed replication status for Performance and DR replication. Returns cluster IDs, replication modes (primary/secondary/disabled), connection states, WAL indexes, merkle tree status, and known secondaries. Use for diagnosing replication health, checking lag, or understanding cluster topology.
    - read_cluster_health: Get comprehensive cluster health including HA status (nodes, leader), Raft autopilot state (server health, failure tolerance, redundancy zones), autopilot configuration, and seal backend status (KMS/HSM health). Use for cluster node count, health monitoring, and raft configuration details.
    - read_metrics: Read Vault telemetry metrics from sys/metrics endpoint. Returns performance metrics, counters, gauges, and summaries including operations/sec, storage metrics, token operations, secret engine activity, and system resource usage. Use for performance monitoring, capacity planning, troubleshooting slow operations, and operational diagnostics.
+   - read_host_info: Read host-level runtime and compute details from sys/host-info (OS/runtime/CPU/memory/host characteristics). Use for infrastructure diagnostics and capacity context.
    - list_leases: List leases at a specific prefix path. Returns keys/paths containing leases. Omit prefix to list top-level lease paths. Use to explore lease hierarchy and discover active leases.
    - read_lease: Read detailed information about a specific lease by lease ID. Returns issue time, expire time, TTL, renewable status, and associated data. Use to inspect lease details and check expiration times.
    - **Namespace support**: All Vault tools accept an optional 'namespace' parameter (e.g., "admin/", "team1/") for Vault Enterprise multi-tenancy
@@ -63,13 +74,15 @@ You have access to two MCP servers:
 
 When a user asks a question:
 1. Understand what they're trying to accomplish and whether they want a SUMMARY or DETAILED view
-   - **Summary questions** ("tell me about AppRole logins", "what happened with auth events"): Use search_events with mount_type filters for specific auth methods (mount_type="approle", "oidc", "ldap", etc.), report top_actors and patterns
-   - **Detailed questions** ("describe this specific login", "who logged in and when"): Find event(s) with search_events using mount_type filters, then use get_event_details for the specific request_id
+   - **Summary questions** ("activity over the past 15 minutes", "what happened with auth events", "give me an overview"): Use \`aggregate_audit_events\` first, include top_actors and key patterns, then use \`search_audit_events\` only when you need representative examples or anomaly drill-down.
+   - **Detailed questions** ("describe this specific login", "who logged in and when"): Find event(s) with \`search_audit_events\` using mount_type filters, then use \`get_event_details\` for specific request_id values.
+   - For broader windows (for example >= 10 minutes) and no request for raw events, default to aggregate-first behavior.
 2. **Decide if you need Vault configuration data**: If the question requires understanding what mounts exist, what secrets are stored, or other Vault state that isn't in audit logs, USE THE VAULT MCP SERVER proactively
    - Examples requiring Vault queries:
      * "Which mounts are configured?" → Use list_mounts
      * "What secrets exist in mount X?" → Use list_secrets with mount parameter
      * "Show me the secret at path Y" → Use read_secret with mount and path parameters
+   - For identity-aware access analysis ("who can access", policy template resolution, alias metadata like identity.entity.aliases...), call introspect_self first.
 3. Identify which tools from which MCP servers are needed
 4. Plan the sequence of tool calls needed (audit queries + Vault API calls)
 5. Execute the tools in order
@@ -82,6 +95,14 @@ When a user asks a question:
    - If still empty, search without mount_type filter to check if ANY events exist in that time window
    - If other events exist but no auth logins, suggest user verify if auth methods are actually being used
 9. **If search returns results but lacks key details** (e.g., role name, entity ID, request path, specific IP), use audit.get_event_details with the request_id from the search results to get full event information including raw audit log JSON
+
+**Documentation Suggestions Policy:**
+- Proactively call 'suggest_documentation' whenever your response discusses Vault concepts, features, configuration, troubleshooting, or best practices.
+- Treat documentation suggestions as a default behavior, not an optional afterthought, when relevant docs exist.
+- Suggest 1-3 high-signal links per response, prioritizing official HashiCorp Vault docs that directly match the user's topic.
+- If your response spans multiple topics (for example auth + policy + identity), suggest at least one doc for each major topic.
+- Do not mention tool usage in the response text; suggestions appear in the separate documentation panel.
+- Avoid noisy suggestions: if no clearly relevant doc exists, skip the tool call.
 
 **Markdown Formatting Guidelines:**
 - Use inline code (single backticks) for technical terms, paths, and values that appear within conversational text: \`approle/\`, \`admin\`, \`list_mounts\`
@@ -436,6 +457,169 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     {
         type: 'function',
         function: {
+            name: 'analyze_secret_access',
+            description: 'Analyze which auth roles can access a Vault API path. Supports conditional evaluation for policy templates and optional KV v2 path expansion.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    target_path: {
+                        type: 'string',
+                        description: 'Vault API path to analyze (for example "sys/mounts" or "kv/tenant-2/secret").',
+                    },
+                    required_capabilities: {
+                        type: 'string',
+                        description: 'Comma-separated capabilities required on target_path (for example "read" or "update,read").',
+                    },
+                    include_kv_v2_paths: {
+                        type: 'boolean',
+                        description: 'When true, expands KV v2 shorthand/related paths to include data/metadata ACL checks.',
+                    },
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                    template_values: {
+                        type: 'object',
+                        description: 'Optional map used to resolve policy template tokens.',
+                    },
+                },
+                required: ['target_path'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_entities',
+            description: 'List Vault identity entities by id or name.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    list_by: {
+                        type: 'string',
+                        enum: ['id', 'name'],
+                        description: 'List entities by "id" (default) or "name".',
+                    },
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_entity',
+            description: 'Read a Vault identity entity by id or name, including entity metadata and aliases.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    entity_id: {
+                        type: 'string',
+                        description: 'Entity ID to read. Provide either entity_id or entity_name.',
+                    },
+                    entity_name: {
+                        type: 'string',
+                        description: 'Entity name to read. Provide either entity_id or entity_name.',
+                    },
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_entity_aliases',
+            description: 'List Vault identity entity aliases by id.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_entity_alias',
+            description: 'Read a Vault identity entity alias by id, including alias metadata and mount accessor.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    alias_id: {
+                        type: 'string',
+                        description: 'Entity alias ID to read.',
+                    },
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+                required: ['alias_id'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'lookup_self',
+            description: 'Look up details about the current Vault token (auth/token/lookup-self), including policies, entity_id, display_name, TTL, and metadata.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_entity_self',
+            description: 'Read the Vault identity entity associated with the current token by resolving entity_id from auth/token/lookup-self. Includes entity metadata and aliases.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'introspect_self',
+            description: 'Introspect current Vault identity by combining auth/token/lookup-self and identity/entity/id/:entity_id (when present). Useful for policy/template-aware access analysis.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    namespace: {
+                        type: 'string',
+                        description: 'Namespace path (for example "admin/"). If not specified, uses root namespace context.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'read_replication_status',
             description: 'Get detailed replication status for Performance and DR replication. Returns cluster IDs, replication modes (primary/secondary/disabled), connection states, WAL indexes, merkle tree status, and known secondaries. Use for diagnosing replication health, checking lag, or understanding cluster topology.',
             parameters: {
@@ -449,6 +633,17 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
         function: {
             name: 'read_metrics',
             description: 'Read Vault telemetry metrics from sys/metrics endpoint. Returns performance metrics, counters, gauges, and summaries including operations/sec, storage metrics, token operations, secret engine activity, system resource usage, and lease information. Use for performance monitoring, capacity planning, troubleshooting slow operations, checking lease counts, and operational diagnostics.',
+            parameters: {
+                type: 'object',
+                properties: {},
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_host_info',
+            description: 'Read detailed host information from Vault sys/host-info endpoint, including OS, runtime, memory, CPU, and host-level characteristics useful for diagnostics and capacity analysis.',
             parameters: {
                 type: 'object',
                 properties: {},
@@ -886,7 +1081,7 @@ export class OpenAILLMService extends BaseLLMService {
                 tool: 'audit.get_event_details', // vault-audit-mcp tool name
                 arguments: input,
             }
-        } else if (toolName === 'list_namespaces' || toolName === 'list_mounts' || toolName === 'list_secrets' || toolName === 'read_secret' || toolName === 'list_policies' || toolName === 'read_policy' || toolName === 'list_auth_methods' || toolName === 'read_auth_method' || toolName === 'list_auth_roles' || toolName === 'read_auth_role' || toolName === 'read_replication_status' || toolName === 'read_metrics' || toolName === 'list_leases' || toolName === 'read_lease' || toolName === 'read_cluster_health') {
+        } else if (toolName === 'list_namespaces' || toolName === 'list_mounts' || toolName === 'list_secrets' || toolName === 'read_secret' || toolName === 'list_policies' || toolName === 'read_policy' || toolName === 'list_auth_methods' || toolName === 'read_auth_method' || toolName === 'list_auth_roles' || toolName === 'read_auth_role' || toolName === 'analyze_secret_access' || toolName === 'list_entities' || toolName === 'read_entity' || toolName === 'list_entity_aliases' || toolName === 'read_entity_alias' || toolName === 'lookup_self' || toolName === 'read_entity_self' || toolName === 'introspect_self' || toolName === 'read_replication_status' || toolName === 'read_metrics' || toolName === 'read_host_info' || toolName === 'list_leases' || toolName === 'read_lease' || toolName === 'read_cluster_health') {
             return {
                 type: 'vault',
                 tool: toolName, // vault-mcp-server tool name

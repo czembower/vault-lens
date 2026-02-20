@@ -1,18 +1,41 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { AuthStatus } from './AuthStatus'
 import './ActivityPanel.css'
 
+interface ClusterInfo {
+    clusterName?: string
+    clusterId?: string
+    version?: string
+    vaultAddr?: string
+    sealed?: boolean
+    standby?: boolean
+    replicationPerfMode?: string
+    replicationDrMode?: string
+}
+
 function ClusterIdentity() {
-    const [clusterInfo, setClusterInfo] = useState<{
-        clusterName?: string
-        clusterId?: string
-        version?: string
-        vaultAddr?: string
-        sealed?: boolean
-        standby?: boolean
-        replicationPerfMode?: string
-        replicationDrMode?: string
-    } | null>(null)
+    const [clusterInfo, setClusterInfo] = useState<ClusterInfo | null>(null)
+    const [changedFields, setChangedFields] = useState<Set<string>>(new Set())
+    const changeClearTimerRef = useRef<number | null>(null)
+
+    const nodeStateFor = (info: ClusterInfo) =>
+        info.sealed ? 'sealed' : info.standby ? 'standby' : 'active'
+
+    const computeChangedFields = (prev: ClusterInfo, next: ClusterInfo): Set<string> => {
+        const changed = new Set<string>()
+        if (prev.vaultAddr !== next.vaultAddr) changed.add('vaultAddr')
+        if (prev.clusterName !== next.clusterName) changed.add('clusterName')
+        if (prev.clusterId !== next.clusterId) changed.add('clusterId')
+        if (prev.version !== next.version) changed.add('version')
+        if (nodeStateFor(prev) !== nodeStateFor(next)) changed.add('nodeState')
+        if (
+            prev.replicationPerfMode !== next.replicationPerfMode ||
+            prev.replicationDrMode !== next.replicationDrMode
+        ) {
+            changed.add('replication')
+        }
+        return changed
+    }
 
     useEffect(() => {
         const fetchClusterInfo = async () => {
@@ -21,7 +44,7 @@ function ClusterIdentity() {
                 if (response.ok) {
                     const data = await response.json()
                     if (data.authenticated && data.cluster) {
-                        setClusterInfo({
+                        const nextInfo: ClusterInfo = {
                             clusterName: data.cluster.clusterName,
                             clusterId: data.cluster.clusterId,
                             version: data.cluster.version,
@@ -30,7 +53,26 @@ function ClusterIdentity() {
                             standby: data.cluster.standby,
                             replicationPerfMode: data.cluster.replicationPerfMode,
                             replicationDrMode: data.cluster.replicationDrMode
+                        }
+
+                        setClusterInfo((prev) => {
+                            if (prev) {
+                                const changed = computeChangedFields(prev, nextInfo)
+                                if (changed.size > 0) {
+                                    setChangedFields(changed)
+                                    if (changeClearTimerRef.current) {
+                                        window.clearTimeout(changeClearTimerRef.current)
+                                    }
+                                    changeClearTimerRef.current = window.setTimeout(() => {
+                                        setChangedFields(new Set())
+                                    }, 1500)
+                                }
+                            }
+                            return nextInfo
                         })
+                    } else if (!data.authenticated) {
+                        setClusterInfo(null)
+                        setChangedFields(new Set())
                     }
                 }
             } catch (err) {
@@ -39,8 +81,15 @@ function ClusterIdentity() {
         }
         fetchClusterInfo()
         const interval = setInterval(fetchClusterInfo, 10000)
-        return () => clearInterval(interval)
+        return () => {
+            clearInterval(interval)
+            if (changeClearTimerRef.current) {
+                window.clearTimeout(changeClearTimerRef.current)
+            }
+        }
     }, [])
+
+    const hasChanged = (field: string) => changedFields.has(field)
 
     if (!clusterInfo) {
         return null
@@ -51,30 +100,30 @@ function ClusterIdentity() {
             {clusterInfo.vaultAddr && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Vault Address:</span>
-                    <span className="cluster-identity-value cluster-vault-addr" title={clusterInfo.vaultAddr}>{clusterInfo.vaultAddr}</span>
+                    <span className={`cluster-identity-value cluster-vault-addr ${hasChanged('vaultAddr') ? 'cluster-changed' : ''}`} title={clusterInfo.vaultAddr}>{clusterInfo.vaultAddr}</span>
                 </div>
             )}
             {clusterInfo.clusterName && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Cluster Name:</span>
-                    <span className="cluster-identity-value cluster-name" title={clusterInfo.clusterName}>{clusterInfo.clusterName}</span>
+                    <span className={`cluster-identity-value cluster-name ${hasChanged('clusterName') ? 'cluster-changed' : ''}`} title={clusterInfo.clusterName}>{clusterInfo.clusterName}</span>
                 </div>
             )}
             {clusterInfo.clusterId && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Cluster ID:</span>
-                    <span className="cluster-identity-value cluster-id" title={clusterInfo.clusterId}>{clusterInfo.clusterId}</span>
+                    <span className={`cluster-identity-value cluster-id ${hasChanged('clusterId') ? 'cluster-changed' : ''}`} title={clusterInfo.clusterId}>{clusterInfo.clusterId}</span>
                 </div>
             )}
             {clusterInfo.version && (
                 <div className="cluster-identity-item">
                     <span className="cluster-identity-label">Vault version:</span>
-                    <span className="cluster-identity-value cluster-version" title={clusterInfo.version}>{clusterInfo.version}</span>
+                    <span className={`cluster-identity-value cluster-version ${hasChanged('version') ? 'cluster-changed' : ''}`} title={clusterInfo.version}>{clusterInfo.version}</span>
                 </div>
             )}
             <div className="cluster-identity-item">
                 <span className="cluster-identity-label">Node type:</span>
-                <span className={`cluster-identity-value cluster-status ${clusterInfo.sealed ? 'sealed' : 'unsealed'}`}>
+                <span className={`cluster-identity-value cluster-status ${clusterInfo.sealed ? 'sealed' : 'unsealed'} ${hasChanged('nodeState') ? 'cluster-changed' : ''}`}>
                     {clusterInfo.sealed ? 'Sealed' : clusterInfo.standby ? 'Standby' : 'Active'}
                 </span>
             </div>
@@ -82,7 +131,7 @@ function ClusterIdentity() {
                 (clusterInfo.replicationDrMode && clusterInfo.replicationDrMode !== 'disabled')) && (
                     <div className="cluster-identity-item">
                         <span className="cluster-identity-label">Replication mode:</span>
-                        <span className="cluster-identity-value">
+                        <span className={`cluster-identity-value ${hasChanged('replication') ? 'cluster-changed' : ''}`}>
                             {clusterInfo.replicationPerfMode && clusterInfo.replicationPerfMode !== 'disabled' && (
                                 <span className="cluster-replication">
                                     Perf: {clusterInfo.replicationPerfMode}
@@ -121,6 +170,9 @@ interface ActivityPanelProps {
 
 export function ActivityPanel({ sessionId, onLogout, onAuthLoadingChange, onUnauthenticatedViewReady }: ActivityPanelProps) {
     const [activities, setActivities] = useState<Activity[]>([])
+    const visibleToolCalls = activities
+        .filter((activity) => activity.type === 'tool_call')
+        .slice(-4)
 
     useEffect(() => {
         // Poll for activities
@@ -185,10 +237,10 @@ export function ActivityPanel({ sessionId, onLogout, onAuthLoadingChange, onUnau
         <div className="activity-panel">
             <ClusterIdentity />
             <div className="activity-content">
-                {activities.map((activity, index) => {
+                {visibleToolCalls.map((activity, index) => {
                     // Calculate opacity based on position (older items at top fade out)
                     // Newest (bottom, last index) = 1.0, oldest (top, index 0) = 0.3
-                    const positionFromEnd = activities.length - 1 - index
+                    const positionFromEnd = visibleToolCalls.length - 1 - index
                     const opacity = Math.max(0.3, 1 - (positionFromEnd * 0.14))
 
                     return (

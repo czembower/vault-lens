@@ -36,7 +36,7 @@ export class ExecutionEngine {
     private vaultClientInitialized = false
     private authManager: VaultAuthManager
     private suggestionHandler?: (suggestion: { title: string; url: string; description: string; context?: string }) => void
-    private activityHandler?: (activity: { type: 'tool_call' | 'thinking' | 'result'; toolType?: string; toolName?: string; description?: string; status?: string; duration?: number; error?: string }) => void
+    private activityHandler?: (activity: { activityId?: string; type: 'tool_call' | 'thinking' | 'result'; toolType?: string; toolName?: string; description?: string; status?: string; duration?: number; error?: string }) => void
 
     constructor(authManager: VaultAuthManager) {
         this.authManager = authManager
@@ -57,7 +57,7 @@ export class ExecutionEngine {
     /**
      * Set handler for activity tracking
      */
-    setActivityHandler(handler: (activity: { type: 'tool_call' | 'thinking' | 'result'; toolType?: string; toolName?: string; description?: string; status?: string; duration?: number; error?: string }) => void) {
+    setActivityHandler(handler: (activity: { activityId?: string; type: 'tool_call' | 'thinking' | 'result'; toolType?: string; toolName?: string; description?: string; status?: string; duration?: number; error?: string }) => void) {
         this.activityHandler = handler
     }
 
@@ -69,7 +69,20 @@ export class ExecutionEngine {
             `[ExecutionEngine] Executing ${toolCall.type} tool: ${toolCall.tool}`
         )
 
+        const activityId = `act-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         const startTime = Date.now()
+
+        // Emit activity start immediately so UI can show an in-progress pulse.
+        if (this.activityHandler) {
+            this.activityHandler({
+                activityId,
+                type: 'tool_call',
+                toolType: toolCall.type,
+                toolName: toolCall.tool,
+                description: 'Running...',
+                status: 'running',
+            })
+        }
 
         try {
             let result: ToolResult
@@ -94,6 +107,7 @@ export class ExecutionEngine {
             // Emit activity completion
             if (this.activityHandler) {
                 this.activityHandler({
+                    activityId,
                     type: 'tool_call',
                     toolType: toolCall.type,
                     toolName: toolCall.tool,
@@ -112,6 +126,7 @@ export class ExecutionEngine {
             // Emit activity error
             if (this.activityHandler) {
                 this.activityHandler({
+                    activityId,
                     type: 'tool_call',
                     toolType: toolCall.type,
                     toolName: toolCall.tool,

@@ -24,6 +24,7 @@ export class MCPAuditClient {
     private buffer = ''
     private command: string
     private initialized = false
+    private readonly debugLogsEnabled = process.env.VAULTLENS_MCP_DEBUG_LOGS === 'true'
 
     constructor(command: string = process.env.VAULT_AUDIT_MCP_COMMAND || './vault-audit-mcp') {
         this.command = command
@@ -59,9 +60,9 @@ export class MCPAuditClient {
             this.processBuffer()
         })
 
-        // Handle stderr
+        // Handle stderr from MCP process (audit server logs here by default).
         this.process.stderr?.on('data', (chunk: Buffer) => {
-            console.error(`[MCP Audit Server Error] ${chunk.toString()}`)
+            this.logServerStderr(chunk.toString())
         })
 
         // Handle process exit
@@ -87,6 +88,37 @@ export class MCPAuditClient {
 
         this.initialized = true
         console.log('[MCP Audit Client] Initialized')
+    }
+
+    private logServerStderr(raw: string): void {
+        const lines = raw.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+        for (const line of lines) {
+            const levelMatch = line.match(/\blevel=([a-zA-Z]+)\b/)
+            const level = levelMatch?.[1]?.toLowerCase()
+            const message = `[MCP Audit Server] ${line}`
+
+            if (level === 'debug') {
+                if (this.debugLogsEnabled) {
+                    console.debug(message)
+                }
+                continue
+            }
+            if (level === 'info') {
+                console.info(message)
+                continue
+            }
+            if (level === 'warn' || level === 'warning') {
+                console.warn(message)
+                continue
+            }
+            if (level === 'error' || level === 'fatal' || level === 'panic') {
+                console.error(message)
+                continue
+            }
+
+            // Unknown format: treat as informational server output.
+            console.info(message)
+        }
     }
 
     /**

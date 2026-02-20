@@ -115,9 +115,10 @@ function getSession(sessionId: string): SessionData {
 
         // Set up activity handler for this session
         executionEngine.setActivityHandler((activity) => {
-            const newActivity: Activity = {
-                id: `act-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                timestamp: new Date().toISOString(),
+            const timestamp = new Date().toISOString()
+            const mapped: Activity = {
+                id: activity.activityId || `act-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                timestamp,
                 type: activity.type,
                 toolType: activity.toolType as 'vault' | 'audit' | 'system' | undefined,
                 toolName: activity.toolName,
@@ -126,7 +127,21 @@ function getSession(sessionId: string): SessionData {
                 duration: activity.duration,
                 error: activity.error
             }
-            session!.activities.push(newActivity)
+
+            if (activity.activityId) {
+                const idx = session!.activities.findIndex((a) => a.id === activity.activityId)
+                if (idx >= 0) {
+                    session!.activities[idx] = {
+                        ...session!.activities[idx],
+                        ...mapped,
+                        id: session!.activities[idx].id,
+                        timestamp: session!.activities[idx].timestamp
+                    }
+                    return
+                }
+            }
+
+            session!.activities.push(mapped)
             if (session!.activities.length > MAX_ACTIVITIES) {
                 session!.activities.shift()
             }
