@@ -13,13 +13,14 @@ interface DocumentationSuggestion {
 
 interface DocumentationSidebarProps {
     sessionId: string;
+    authenticated: boolean;
     onLogout?: () => void;
     onAuthLoadingChange?: (loading: boolean, message: string | null) => void;
     tokenCount: { total: number; messages: number; maxContext: number } | null;
     onUnauthenticatedViewReady?: () => void;
 }
 
-export function DocumentationSidebar({ sessionId, onLogout, onAuthLoadingChange, tokenCount, onUnauthenticatedViewReady }: DocumentationSidebarProps) {
+export function DocumentationSidebar({ sessionId, authenticated, onLogout, onAuthLoadingChange, tokenCount, onUnauthenticatedViewReady }: DocumentationSidebarProps) {
     const [suggestions, setSuggestions] = useState<DocumentationSuggestion[]>([])
     const [isOIDC, setIsOIDC] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -57,6 +58,19 @@ export function DocumentationSidebar({ sessionId, onLogout, onAuthLoadingChange,
     // keep using polling and global events instead to refresh OIDC status.
 
     useEffect(() => {
+        if (!authenticated) {
+            setSuggestions([])
+            void fetch('/api/suggestions/clear', {
+                method: 'POST',
+                headers: {
+                    'X-Session-ID': sessionId
+                }
+            }).catch((err) => {
+                console.error('Failed to clear suggestions after auth loss:', err)
+            })
+            return
+        }
+
         // Poll for suggestions
         const fetchSuggestions = async () => {
             try {
@@ -77,7 +91,7 @@ export function DocumentationSidebar({ sessionId, onLogout, onAuthLoadingChange,
         fetchSuggestions()
         const interval = setInterval(fetchSuggestions, 2000) // Poll every 2 seconds
         return () => clearInterval(interval)
-    }, [sessionId])
+    }, [sessionId, authenticated])
 
     const handleClear = async () => {
         try {

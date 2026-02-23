@@ -586,6 +586,7 @@ function App() {
             {/* Pass handleUnauthenticatedViewReady to AuthStatus in the sidebar */}
             <DocumentationSidebar
                 sessionId={sessionId.current}
+                authenticated={authenticated}
                 onLogout={handleLogout}
                 onAuthLoadingChange={handleAuthLoadingChange}
                 tokenCount={tokenCount}
