@@ -2,9 +2,21 @@
 
 VaultLens is a full-stack TypeScript app for interacting with HashiCorp Vault using an LLM agent. It combines:
 
-- Vault audit analysis (via `vault-audit-mcp`)
-- Vault operational queries/actions (via `vault-mcp-server`)
+- Vault audit analysis (via [`vault-mcp-server`](https://github.com/czembower/vault-mcp-server/tree/split-upstream-changes))
+- Vault operational queries/actions (via [`vault-audit-mcp`](https://github.com/czembower/vault-audit-mcp))
 - A React UI with streaming responses and session-scoped history
+- Documentation suggestions
+
+This provides a natural language interface to reconcile Vault configuration against client activity and behaviors.
+
+## Example Prompts
+
+- `What is the current cluster status?`
+- `Have there been any failed authentication events recently?`
+- `Which Vault entities have access to the secret at kv/foo in the operations namespace?`
+- `Which ACL policies have been used within the last 24 hours?`
+- `Which auth roles associated with the mount auth/oidc have been used to login recently?`
+- `Have there been secret access errors in the past two hours?`
 
 ## Stack
 
@@ -29,8 +41,10 @@ VaultLens is a full-stack TypeScript app for interacting with HashiCorp Vault us
   - `vault-audit-mcp`
   - `vault-mcp-server`
 - Vault cluster accessible from the backend
-- Loki accessible if you use audit queries
+- Loki if you use audit queries (see the `vault-audit-mcp` project for details)
 - API key for selected LLM provider
+
+Note that `vault-audit-mcp` and `vault-mcp-server` should be sourced from https://github.com/czembower?tab=repositories
 
 ## Setup
 
@@ -61,9 +75,7 @@ cp .env.example .env
 - `VITE_PORT`: frontend dev port (default `5173`)
 - `VAULT_OIDC_REDIRECT_URI`: OIDC callback URL (default `http://localhost:8250/oidc/callback`)
 
-Notes:
-- `VAULT_MCP_URL` appears in `.env.example` but is not used by current server code.
-- MCP servers are started as local processes via stdio, not HTTP URLs.
+Notes: MCP servers are started as local processes via stdio, not HTTP URLs.
 
 ## Development
 
@@ -154,6 +166,82 @@ src/
 - `npm run build:client`
 - `npm run preview`
 - `npm run type-check`
+
+## Consolidated Notes
+
+This section consolidates critical content that previously lived in:
+`ARCHITECTURE.md`, `FILES_INDEX.md`, `GETTING_STARTED.md`, `LLM_PROVIDERS.md`,
+`MCP_CONNECTION.md`, `MCP_STDIO.md`, `PROJECT_SUMMARY.md`,
+`SETUP_COMPLETE.md`, and `TOKEN_MANAGEMENT.md`.
+
+### End-to-End Runtime Flow
+
+1. User sends a natural-language query from the React UI.
+2. Backend (`Express`) forwards query + tool definitions to the selected LLM provider.
+3. LLM decides on tool calls.
+4. `ExecutionEngine` routes tool calls:
+   - Audit tools -> `vault-audit-mcp` client
+   - Vault tools -> `vault-mcp-server` client
+5. Tool results are returned to the LLM for synthesis.
+6. Final response (plus tool call/result metadata) is streamed back to UI.
+
+### MCP Integration Details
+
+- Current transport model is local-process execution via configured command paths.
+- Ensure binaries are present and executable:
+  - `VAULT_AUDIT_MCP_COMMAND`
+  - `VAULT_MCP_COMMAND`
+- Typical verification:
+
+```bash
+./vault-audit-mcp --help
+./vault-mcp-server --help
+```
+
+- Common failures:
+  - `EACCES` or permission denied -> `chmod +x <binary>`
+  - command not found / startup timeout -> fix command path in `.env`
+
+### LLM Provider Switching
+
+- `LLM_PROVIDER=anthropic` or `LLM_PROVIDER=openai`
+- Required key must be present for selected provider:
+  - `ANTHROPIC_API_KEY`
+  - `OPENAI_API_KEY`
+- Restart server after switching provider.
+- The API/UI behavior is provider-agnostic; provider-specific logic stays in `src/server/llm/*`.
+
+### Token and Large-Result Strategy
+
+VaultLens expects summarized audit payloads for high-volume queries to avoid token overflow:
+
+- Large audit result sets should be reduced to summary statistics + small representative samples.
+- Follow-up narrowing queries (namespace/status/path/time) are preferred over returning raw bulk events.
+- Aggregate/count-style tools are naturally compact and should be preferred for broad scans.
+
+### Source of Truth Files
+
+- Main entry points:
+  - `src/server/index.ts`
+  - `src/server/execution-engine.ts`
+  - `src/server/auth/manager.ts`
+  - `src/client/App.tsx`
+  - `src/client/DocumentationSidebar.tsx`
+- Start here for behavior changes instead of maintaining parallel docs.
+
+### Operational Troubleshooting
+
+- Auth appears stale or expired:
+  - check `GET /auth/status`
+  - re-authenticate via UI
+  - logout/login to force token reset
+- Tools not executing:
+  - verify MCP command paths in `.env`
+  - run binaries directly from shell
+  - check backend logs for tool timeout / parse errors
+- Frontend/backed mismatch:
+  - confirm Vite proxy and backend port (`VITE_PORT` / `API_PORT`)
+  - restart `npm run dev`
 
 ## License
 
