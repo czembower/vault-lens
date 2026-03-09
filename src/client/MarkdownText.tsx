@@ -1,4 +1,3 @@
-import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -64,12 +63,10 @@ export function MarkdownText({ content }: MarkdownTextProps) {
                     }} />
                 ),
                 // Style code blocks
-                code: ({ node, inline, className, children, ...props }) => {
-                    console.log('[MarkdownText] Code element:', { inline, className, children, hasNode: !!node })
-
-                    // Safety check: If content has no newlines, it's inline code regardless of what react-markdown says
+                code: ({ className, children, ...props }) => {
+                    // Safety check: If content has no newlines, render as inline code.
                     const content = String(children)
-                    const isActuallyInline = inline || !content.includes('\n')
+                    const isActuallyInline = !content.includes('\n')
 
                     if (isActuallyInline) {
                         return <code className="inline-code" {...props}>{children}</code>

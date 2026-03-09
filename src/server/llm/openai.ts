@@ -6,8 +6,8 @@
  */
 
 import OpenAI from 'openai'
-import { ExecutionEngine, ToolCall, ToolResult } from '../execution-engine'
-import { BaseLLMService, QueryResult, ConversationContext, StreamChunk } from './base'
+import { ExecutionEngine, ToolCall, ToolResult } from '../execution-engine.js'
+import { BaseLLMService, QueryResult, ConversationContext, StreamChunk } from './base.js'
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.2'
 
@@ -738,7 +738,7 @@ export class OpenAILLMService extends BaseLLMService {
     /**
      * Execute a query using OpenAI with agentic loop
      */
-    async executeQuery(query: string, context?: ConversationContext): Promise<QueryResult> {
+    async executeQuery(query: string, _context?: ConversationContext): Promise<QueryResult> {
         console.log(`[OpenAI Agent] Processing query: ${query}`)
 
         // Get current timestamp and add it to the query for context
@@ -876,7 +876,7 @@ export class OpenAILLMService extends BaseLLMService {
 
     async *executeQueryStream(
         query: string,
-        context?: ConversationContext
+        _context?: ConversationContext
     ): AsyncGenerator<StreamChunk, void, unknown> {
         console.log(`[OpenAI Agent] Processing streaming query: ${query}`)
 

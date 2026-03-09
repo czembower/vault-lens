@@ -589,7 +589,6 @@ function App() {
                 authenticated={authenticated}
                 onLogout={handleLogout}
                 onAuthLoadingChange={handleAuthLoadingChange}
-                tokenCount={tokenCount}
                 onUnauthenticatedViewReady={handleUnauthenticatedViewReady}
             />
 

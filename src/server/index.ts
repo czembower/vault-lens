@@ -1,9 +1,9 @@
 import express, { Request, Response } from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { createLLMService } from './llm-factory'
-import { ExecutionEngine } from './execution-engine'
-import { VaultAuthManager } from './auth/manager'
+import { createLLMService } from './llm-factory.js'
+import { ExecutionEngine } from './execution-engine.js'
+import { VaultAuthManager } from './auth/manager.js'
 
 dotenv.config()
 
@@ -196,7 +196,7 @@ interface DocumentationSuggestion {
 const MAX_SUGGESTIONS = 6 // Keep only the 6 most recent suggestions
 
 // Health check
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
@@ -375,7 +375,7 @@ app.post('/activities/clear', async (req: Request, res: Response) => {
 })
 
 // Authentication status endpoint
-app.get('/auth/status', async (req: Request, res: Response) => {
+app.get('/auth/status', async (_req: Request, res: Response) => {
     try {
         const status = await authManager.getStatus()
         res.json(status)
@@ -413,7 +413,7 @@ app.post('/auth/oidc/auth-url', async (req: Request, res: Response) => {
 })
 
 // Complete OIDC authentication (after client opens popup)
-app.post('/auth/oidc/complete', async (req: Request, res: Response) => {
+app.post('/auth/oidc/complete', async (_req: Request, res: Response) => {
     try {
         await authManager.completeOIDCAuth()
 
@@ -486,7 +486,7 @@ app.post('/auth/switch-cluster', async (req: Request, res: Response) => {
 })
 
 // Clear cached token (logout)
-app.post('/auth/logout', async (req: Request, res: Response) => {
+app.post('/auth/logout', async (_req: Request, res: Response) => {
     try {
         // Revoke token in Vault and clear from cache
         await authManager.clearToken()

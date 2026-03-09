@@ -5,7 +5,7 @@
  * Ensures consistent behavior across different AI backends
  */
 
-import { ExecutionEngine, ToolCall, ToolResult } from '../execution-engine'
+import { ExecutionEngine, ToolCall, ToolResult } from '../execution-engine.js'
 
 export interface QueryResult {
     query: string

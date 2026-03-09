@@ -103,10 +103,9 @@ export class OIDCAuthenticator {
         }
 
         // 3. Start callback server but don't open browser
-        this.authState.callbackPromise = this.startCallbackServer(
-            this.authState.callbackUrl,
-            state
-        )
+        const callbackUrl = new URL(this.config.redirectUri)
+        this.authState.callbackUrl = callbackUrl
+        this.authState.callbackPromise = this.startCallbackServer(callbackUrl, state)
 
         return authUrl
     }

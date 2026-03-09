@@ -6,9 +6,9 @@
  * - Vault MCP Server: For performing Vault operations (stdio via MCPVaultClient)
  */
 
-import { MCPAuditClient } from './mcp-audit-client'
-import { MCPVaultClient } from './mcp-vault-client'
-import { VaultAuthManager } from './auth/manager'
+import { MCPAuditClient } from './mcp-audit-client.js'
+import { MCPVaultClient } from './mcp-vault-client.js'
+import { VaultAuthManager } from './auth/manager.js'
 
 export interface ToolCall {
     type: 'vault' | 'audit' | 'system'
@@ -34,12 +34,10 @@ export class ExecutionEngine {
     private auditClientInitialized = false
     private vaultClient: MCPVaultClient
     private vaultClientInitialized = false
-    private authManager: VaultAuthManager
     private suggestionHandler?: (suggestion: { title: string; url: string; description: string; context?: string }) => void
     private activityHandler?: (activity: { activityId?: string; type: 'tool_call' | 'thinking' | 'result'; toolType?: string; toolName?: string; description?: string; status?: string; duration?: number; error?: string }) => void
 
     constructor(authManager: VaultAuthManager) {
-        this.authManager = authManager
         this.auditClient = new MCPAuditClient()
         this.vaultClient = new MCPVaultClient(
             process.env.VAULT_MCP_COMMAND || './vault-mcp-server',
@@ -309,7 +307,7 @@ export class ExecutionEngine {
         return results
     }
 
-    private isCriticalStep(toolCall: ToolCall): boolean {
+    private isCriticalStep(_toolCall: ToolCall): boolean {
         // Define which steps are critical (failures should stop execution)
         // For now, all steps are critical
         return true

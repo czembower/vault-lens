@@ -5,10 +5,10 @@
  * based on the LLM_PROVIDER environment variable
  */
 
-import { ExecutionEngine } from './execution-engine'
-import { BaseLLMService } from './llm/base'
-import { AnthropicLLMService } from './llm/anthropic'
-import { OpenAILLMService } from './llm/openai'
+import { ExecutionEngine } from './execution-engine.js'
+import { BaseLLMService } from './llm/base.js'
+import { AnthropicLLMService } from './llm/anthropic.js'
+import { OpenAILLMService } from './llm/openai.js'
 
 export type LLMProvider = 'anthropic' | 'openai'
 

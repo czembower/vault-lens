@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AuthStatus } from './AuthStatus'
 import './ActivityPanel.css'
 
@@ -196,20 +196,6 @@ export function ActivityPanel({ sessionId, onLogout, onAuthLoadingChange, onUnau
         const interval = setInterval(fetchActivities, 1000) // Poll every second for real-time updates
         return () => clearInterval(interval)
     }, [sessionId])
-
-    const handleClear = async () => {
-        try {
-            await fetch('/api/activities/clear', {
-                method: 'POST',
-                headers: {
-                    'X-Session-ID': sessionId
-                }
-            })
-            setActivities([])
-        } catch (err) {
-            console.error('Failed to clear activities:', err)
-        }
-    }
 
     const getActivityIcon = (activity: Activity) => {
         if (activity.type === 'tool_call') {

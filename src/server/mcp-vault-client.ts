@@ -7,7 +7,7 @@
  */
 
 import { spawn, ChildProcess } from 'child_process'
-import { VaultAuthManager } from './auth/manager'
+import { VaultAuthManager } from './auth/manager.js'
 
 export interface VaultToolResult {
     success: boolean

@@ -11,8 +11,8 @@
 import dotenv from 'dotenv'
 import axios from 'axios'
 import https from 'https'
-import { OIDCAuthenticator, OIDCConfig } from './oidc'
-import { TokenCache } from './token-cache'
+import { OIDCAuthenticator, OIDCConfig } from './oidc.js'
+import { TokenCache } from './token-cache.js'
 
 dotenv.config()
 

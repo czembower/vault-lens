@@ -4,7 +4,6 @@
  * Displays current token usage and remaining context window
  */
 
-import React from 'react'
 import './TokenUsage.css'
 
 interface TokenUsageProps {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AuthStatus } from './AuthStatus'
 import './DocumentationSidebar.css'
 
@@ -16,11 +16,10 @@ interface DocumentationSidebarProps {
     authenticated: boolean;
     onLogout?: () => void;
     onAuthLoadingChange?: (loading: boolean, message: string | null) => void;
-    tokenCount: { total: number; messages: number; maxContext: number } | null;
     onUnauthenticatedViewReady?: () => void;
 }
 
-export function DocumentationSidebar({ sessionId, authenticated, onLogout, onAuthLoadingChange, tokenCount, onUnauthenticatedViewReady }: DocumentationSidebarProps) {
+export function DocumentationSidebar({ sessionId, authenticated, onLogout, onAuthLoadingChange, onUnauthenticatedViewReady }: DocumentationSidebarProps) {
     const [suggestions, setSuggestions] = useState<DocumentationSuggestion[]>([])
     const [isOIDC, setIsOIDC] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -92,20 +91,6 @@ export function DocumentationSidebar({ sessionId, authenticated, onLogout, onAut
         const interval = setInterval(fetchSuggestions, 2000) // Poll every 2 seconds
         return () => clearInterval(interval)
     }, [sessionId, authenticated])
-
-    const handleClear = async () => {
-        try {
-            await fetch('/api/suggestions/clear', {
-                method: 'POST',
-                headers: {
-                    'X-Session-ID': sessionId
-                }
-            })
-            setSuggestions([])
-        } catch (err) {
-            console.error('Failed to clear suggestions:', err)
-        }
-    }
 
     return (
         <div className="documentation-sidebar">

@@ -4,7 +4,7 @@
  * Displays current authentication status and provides login/logout controls
  */
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import './AuthStatus.css'
 
 interface AuthStatusProps {

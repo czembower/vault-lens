@@ -6,8 +6,8 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { ExecutionEngine, ToolCall, ToolResult } from '../execution-engine'
-import { BaseLLMService, QueryResult, ConversationContext, StreamChunk } from './base'
+import { ExecutionEngine, ToolCall, ToolResult } from '../execution-engine.js'
+import { BaseLLMService, QueryResult, ConversationContext, StreamChunk } from './base.js'
 
 const getSystemPrompt = (): string => {
     const now = new Date().toISOString();
@@ -620,7 +620,7 @@ export class AnthropicLLMService extends BaseLLMService {
     /**
      * Execute a query using Claude with agentic loop
      */
-    async executeQuery(query: string, context?: ConversationContext): Promise<QueryResult> {
+    async executeQuery(query: string, _context?: ConversationContext): Promise<QueryResult> {
         console.log(`[Anthropic Agent] Processing query: ${query}`)
 
         // Get current timestamp and add it to the query for context
@@ -658,19 +658,22 @@ export class AnthropicLLMService extends BaseLLMService {
 
             // Step 2: Process tool uses in an agentic loop
             while (response.stop_reason === 'tool_use') {
-                const assistantMessage = {
-                    role: 'assistant' as const,
+                const assistantMessage: Anthropic.MessageParam = {
+                    role: 'assistant',
                     content: response.content,
                 }
-                this.conversationHistory.push(assistantMessage)
                 messages.push(assistantMessage)
+                this.conversationHistory.push({
+                    role: 'assistant',
+                    content: this.extractTextFromResponse(response),
+                })
 
                 const toolResultContent: Anthropic.ToolResultBlockParam[] = []
 
                 // Execute all tool calls in this response
                 for (const block of response.content) {
                     if (block.type === 'tool_use') {
-                        const toolCall = this.toolUseToToolCall(block.name, block.input)
+                        const toolCall = this.toolUseToToolCall(block.name, this.normalizeToolInput(block.input))
                         toolCalls.push(toolCall)
 
                         console.log(`[Anthropic Agent] Executing tool: ${block.name}`)
@@ -737,7 +740,7 @@ export class AnthropicLLMService extends BaseLLMService {
 
     async *executeQueryStream(
         query: string,
-        context?: ConversationContext
+        _context?: ConversationContext
     ): AsyncGenerator<StreamChunk, void, unknown> {
         console.log(`[Anthropic Agent] Processing streaming query: ${query}`)
 
@@ -796,19 +799,22 @@ export class AnthropicLLMService extends BaseLLMService {
                             needsMoreIterations = true
 
                             // Add assistant message to history
-                            const assistantMessage = {
-                                role: 'assistant' as const,
+                            const assistantMessage: Anthropic.MessageParam = {
+                                role: 'assistant',
                                 content: message.content,
                             }
-                            this.conversationHistory.push(assistantMessage)
                             messages.push(assistantMessage)
+                            this.conversationHistory.push({
+                                role: 'assistant',
+                                content: this.extractTextFromResponse(message),
+                            })
 
                             const toolResultContent: Anthropic.ToolResultBlockParam[] = []
 
                             // Execute all tool calls in this response
                             for (const block of message.content) {
                                 if (block.type === 'tool_use') {
-                                    const toolCall = this.toolUseToToolCall(block.name, block.input)
+                                    const toolCall = this.toolUseToToolCall(block.name, this.normalizeToolInput(block.input))
                                     toolCalls.push(toolCall)
 
                                     yield { type: 'tool_call', toolCall }
@@ -914,6 +920,13 @@ export class AnthropicLLMService extends BaseLLMService {
             }
         }
         throw new Error(`Unknown tool: ${toolName}`)
+    }
+
+    private normalizeToolInput(input: unknown): Record<string, unknown> {
+        if (input && typeof input === 'object' && !Array.isArray(input)) {
+            return input as Record<string, unknown>
+        }
+        return {}
     }
 
     /**
