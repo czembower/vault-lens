@@ -50,10 +50,31 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# Check ANTHROPIC_API_KEY
-if ! grep -q "ANTHROPIC_API_KEY=sk_" .env; then
-    echo "❌ ANTHROPIC_API_KEY not set in .env"
-    echo "   Please edit .env and add your Claude API key"
+# Source .env to get the actual values (handles quotes automatically)
+set +e
+source .env 2>/dev/null
+set -e
+
+# Determine which LLM provider is configured
+LLM_PROVIDER=$(echo "${LLM_PROVIDER:-anthropic}" | tr '[:upper:]' '[:lower:]')
+
+if [ "$LLM_PROVIDER" = "openai" ]; then
+    if [ -z "$OPENAI_API_KEY" ] || [[ ! "$OPENAI_API_KEY" == sk-* ]]; then
+        echo "❌ OPENAI_API_KEY not set in .env"
+        echo "   Please edit .env and add your OpenAI API key"
+        exit 1
+    fi
+    echo "✅ OpenAI API key configured"
+elif [ "$LLM_PROVIDER" = "anthropic" ]; then
+    if [ -z "$ANTHROPIC_API_KEY" ] || [[ ! "$ANTHROPIC_API_KEY" == sk* ]]; then
+        echo "❌ ANTHROPIC_API_KEY not set in .env"
+        echo "   Please edit .env and add your Anthropic API key"
+        exit 1
+    fi
+    echo "✅ Anthropic API key configured"
+else
+    echo "❌ Unknown LLM_PROVIDER '$LLM_PROVIDER' in .env"
+    echo "   Supported values: anthropic, openai"
     exit 1
 fi
 
